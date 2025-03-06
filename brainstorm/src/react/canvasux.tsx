@@ -24,8 +24,9 @@ import {
 } from "./buttonux.js";
 import { undefinedUserId } from "../utils/utils.js";
 import { undoRedo } from "../utils/undo.js";
-import { Items, ItemsView } from "../components/items.js";
+import { itemAllowedTypes, Items, ItemsView } from "../components/items.js";
 import { Item } from "../components/itemAbstractions.js";
+import { evaluateLazySchema } from "fluid-framework/alpha";
 
 export function Canvas(props: {
 	items: TreeView<typeof Items>;
@@ -94,15 +95,42 @@ export function Canvas(props: {
 		};
 	}, []);
 
+	const isRoot = Tree.parent(props.items.root) === undefined;
+
+	let itemsView = (
+		<ItemsView
+			isRoot={isRoot}
+			items={itemsArray}
+			parent={props.items.root}
+			clientId={props.currentUser}
+			session={props.sessionTree.root}
+			fluidMembers={props.fluidMembers}
+		/>
+	);
+
+	if (isRoot) {
+		return (itemsView = (
+			<div className="flex grow-0 flex-row h-full w-full flex-wrap gap-4 p-4 content-start overflow-y-scroll">
+				{itemsView}
+				<div className="flex w-full h-24"></div>
+			</div>
+		));
+	} else {
+		const kinds = itemAllowedTypes.map(evaluateLazySchema);
+		for (const kind of kinds) {
+			if (kind.AddButton !== undefined) {
+				// TODO: use key?
+				// const key = `new${kind.description}`;
+				pilesArray.push(<kind.AddButton target={props.parent} clientId={props.clientId} />);
+			}
+		}
+
+		itemsView = <div className="flex flex-row flex-wrap gap-8 p-2">{pilesArray}</div>;
+	}
+
 	return (
 		<div className="relative flex grow-0 h-full w-full bg-transparent">
-			<ItemsView
-				items={itemsArray}
-				parent={props.items.root}
-				clientId={props.currentUser}
-				session={props.sessionTree.root}
-				fluidMembers={props.fluidMembers}
-			/>
+			{itemsView}
 			<Floater>
 				<ButtonGroup>
 					<NewGroupButton

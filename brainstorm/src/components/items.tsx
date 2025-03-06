@@ -36,14 +36,13 @@ export const itemAllowedTypes: Component.LazyArray<ItemSchema> = [() => Group, (
 export const Items = makeItems(itemAllowedTypes);
 
 export function ItemsView(props: {
+	isRoot: boolean;
 	items: Item[];
 	parent: Items;
 	clientId: string;
 	session: Session;
 	fluidMembers: string[];
 }): JSX.Element {
-	const isRoot = Tree.parent(props.parent) === undefined;
-
 	const pilesArray: JSX.Element[] = [];
 	for (const i of props.items) {
 		const View = i.View;
@@ -56,25 +55,5 @@ export function ItemsView(props: {
 				fluidMembers={props.fluidMembers}
 			/>,
 		);
-	}
-
-	if (isRoot) {
-		return (
-			<div className="flex grow-0 flex-row h-full w-full flex-wrap gap-4 p-4 content-start overflow-y-scroll">
-				{pilesArray}
-				<div className="flex w-full h-24"></div>
-			</div>
-		);
-	} else {
-		const kinds = itemAllowedTypes.map(evaluateLazySchema);
-		for (const kind of kinds) {
-			if (kind.AddButton !== undefined) {
-				// TODO: use key?
-				// const key = `new${kind.description}`;
-				pilesArray.push(<kind.AddButton target={props.parent} clientId={props.clientId} />);
-			}
-		}
-
-		return <div className="flex flex-row flex-wrap gap-8 p-2">{pilesArray}</div>;
 	}
 }
