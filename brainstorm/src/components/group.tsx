@@ -4,7 +4,7 @@
  */
 
 import { SchemaFactory, Tree } from "fluid-framework";
-import { Item, itemFields, ItemSchema, MyAppComponent } from "./itemAbstractions.js";
+import { Item, itemFields, ItemSchema, ItemsSchema, MyAppComponent } from "./itemAbstractions.js";
 import React, { JSX, useEffect, useState } from "react";
 import { dragType } from "../utils/utils.js";
 import { ConnectableElement, useDrag, useDrop } from "react-dnd";
@@ -14,96 +14,103 @@ import { Session } from "../schema/session_schema.js";
 import { Component, TreeAlpha } from "fluid-framework/alpha";
 import { getSelectedItems } from "../utils/session_helpers.js";
 import { RectangleLandscapeRegular } from "@fluentui/react-icons";
-import { canDropItem, tryAsItemParent } from "./items.js";
-
-// This import is a bit sketchy as it causes a cycle, so it can only be used lazily and with care.
-// This cycle is necessary since the schema is actually co-recursive (Items allows Group as a child type).
-// This cyclic import could be avoided by moving the code which needs it (i.e. the Group class) inside of groupComponent.itemTypes
-// and accessing it from the provided config instead.
-import { Items } from "../schema/app_schema.js";
+import { canDropItem, Items, tryAsItemParent } from "./items.js";
 
 // Include a UUID to guarantee that this schema will be uniquely identifiable.
 const sf = new SchemaFactory("d3872080-b9bd-4315-a210-0dda4fedcb18");
 
-// Define the schema for the container of notes.
-export class Group
-	extends sf.object("Group", {
-		...itemFields,
-		name: sf.string,
-		items: [() => Items],
-	})
-	implements Item
-{
-	public children(): Iterable<Item> {
-		return this.items;
-	}
-	public static readonly description = "Group";
-	public static readonly icon = (<RectangleLandscapeRegular />);
-	public static default(author: string, name = "[new group]"): Group {
-		return new Group({
-			name,
-			items: new Items([]),
-		});
-	}
-
-	public postInsertNew(session: Session, clientId: string): void {
-		// Move selected items into this group
-
-		// Look for selected items within root Items subtree.
-		// TODO: consider making findItem more generic to allow searching subtrees with unknown schema.
-		const branch = TreeAlpha.branch(this);
-		if (!branch?.hasRootSchema(Items)) {
-			return;
+/**
+ * Groups can contain any type of item via the generic ItemsSchema.
+ * This includes other groups.
+ * For this to work without producing a cyclic dependency, the final version of ItemsSchema,
+ * which includes Group, gets lazy schema references to its content types derived from the {@link MyAppComponent}s,
+ * and that ItemsSchema is then injected into here (also as part of composing the app components).
+ */
+function makeGroup(itemsSchema: ItemsSchema) {
+	// Define the schema for the container of notes.
+	class Group
+		extends sf.object("Group", {
+			...itemFields,
+			name: sf.string,
+			items: itemsSchema,
+		})
+		implements Item
+	{
+		public children(): Iterable<Item> {
+			return this.items;
 		}
-
-		const ids = getSelectedItems(session, clientId);
-		for (const id of ids) {
-			const n = findItem(branch.root, id);
-			if (n !== undefined) {
-				tryAsItemParent(this.items)?.tryStealItem(n);
-			}
-		}
-	}
-
-	public deleted(oldParent: Items, oldIndex: number): void {
-		// Move the children of the group to the parent
-		if (this.items.length !== 0) {
-			oldParent.moveRangeToIndex(oldIndex, 0, this.items.length, this.items);
-		}
-	}
-
-	public readonly View = (props: {
-		clientId: string;
-		session: Session;
-		fluidMembers: string[];
-	}): JSX.Element => {
-		return <GroupView group={this} {...props} />;
-	};
-
-	/**
-	 * Removes a group from its parent {@link Items}.
-	 * If the note is not in an {@link Items}, it is left unchanged.
-	 *
-	 * Before removing the group, its children are move to the parent.
-	 */
-	public readonly delete = () => {
-		const parent = Tree.parent(this);
-		if (Tree.is(parent, Items)) {
-			// Run the deletion as a transaction to ensure that the tree is in a consistent state
-			Tree.runTransaction(parent, () => {
-				// Move the children of the group to the parent
-				if (this.items.length !== 0) {
-					const index = parent.indexOf(this);
-					parent.moveRangeToIndex(index, 0, this.items.length, this.items);
-				}
-
-				// Delete the now empty group
-				const i = parent.indexOf(this);
-				parent.removeAt(i);
+		public static readonly description = "Group";
+		public static readonly icon = (<RectangleLandscapeRegular />);
+		public static default(author: string, name = "[new group]"): Group {
+			return new Group({
+				name,
+				items: new itemsSchema([]),
 			});
 		}
-	};
+
+		public postInsertNew(session: Session, clientId: string): void {
+			// Move selected items into this group
+
+			// Look for selected items within root Items subtree.
+			// TODO: consider making findItem more generic to allow searching subtrees with unknown schema.
+			const branch = TreeAlpha.branch(this);
+			if (!branch?.hasRootSchema(itemsSchema)) {
+				return;
+			}
+
+			const ids = getSelectedItems(session, clientId);
+			for (const id of ids) {
+				const n = findItem(branch.root, id);
+				if (n !== undefined) {
+					tryAsItemParent(this.items)?.tryStealItem(n);
+				}
+			}
+		}
+
+		public deleted(oldParent: Items, oldIndex: number): void {
+			// Move the children of the group to the parent
+			if (this.items.length !== 0) {
+				oldParent.moveRangeToIndex(oldIndex, 0, this.items.length, this.items);
+			}
+		}
+
+		public readonly View = (props: {
+			clientId: string;
+			session: Session;
+			fluidMembers: string[];
+		}): JSX.Element => {
+			return <GroupView group={this} {...props} />;
+		};
+
+		/**
+		 * Removes a group from its parent {@link Items}.
+		 * If the note is not in an {@link Items}, it is left unchanged.
+		 *
+		 * Before removing the group, its children are move to the parent.
+		 */
+		public readonly delete = () => {
+			const parent = Tree.parent(this);
+			if (Tree.is(parent, itemsSchema)) {
+				// Run the deletion as a transaction to ensure that the tree is in a consistent state
+				Tree.runTransaction(parent, () => {
+					// Move the children of the group to the parent
+					if (this.items.length !== 0) {
+						const index = parent.indexOf(this);
+						parent.moveRangeToIndex(index, 0, this.items.length, this.items);
+					}
+
+					// Delete the now empty group
+					const i = parent.indexOf(this);
+					parent.removeAt(i);
+				});
+			}
+		};
+	}
+
+	return Group;
 }
+
+type Group = InstanceType<ReturnType<typeof makeGroup>>;
 
 export function GroupView(props: {
 	group: Group;
@@ -235,8 +242,7 @@ export function DeletePileButton(props: { deletePile: () => void }): JSX.Element
 }
 
 export const groupComponent: MyAppComponent = {
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	itemTypes(config): Component.LazyArray<ItemSchema> {
-		return [() => Group];
+		return [() => makeGroup(config().Items)];
 	},
 };

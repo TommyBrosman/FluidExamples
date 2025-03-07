@@ -50,14 +50,14 @@ export function composeComponents(allComponents: readonly MyAppComponent[]): MyA
 
 export const appConfig = composeComponents([groupComponent, noteComponent, boxComponent]);
 
-export const itemAllowedTypes: Component.LazyArray<ItemSchema> = appConfig.allowedItemTypes; // [() => Group, () => Note];
+export const itemAllowedTypes: Component.LazyArray<ItemSchema> = appConfig.allowedItemTypes;
 
 export const Items = appConfig.Items;
 export type Items = ItemsType;
 
 // Export the tree config appropriate for this schema.
 // This is passed into the SharedTree when it is initialized.
-// This eagerly evaluates the schema, so anything uses by these schema (Like how Group uses Items) must be defined before this point.
+// This eagerly evaluates the schema, so anything that used by these schema must be defined before this point.
 export const appTreeConfiguration = new TreeViewConfiguration(
 	// Schema for the root
 	{ schema: appConfig.Items },
