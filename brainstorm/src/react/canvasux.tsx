@@ -3,7 +3,7 @@
  * Licensed under the MIT License.
  */
 
-import React, { JSX, useEffect, useState } from "react";
+import React, { JSX, useEffect } from "react";
 import { Session } from "../schema/session_schema.js";
 import {
 	ConnectionState,
@@ -23,11 +23,10 @@ import {
 import { undefinedUserId } from "../utils/utils.js";
 import { undoRedo } from "../utils/undo.js";
 import { evaluateLazySchema } from "fluid-framework/alpha";
-import { ItemsSchema } from "../components/itemAbstractions.js";
 import { itemAllowedTypes, Items } from "../schema/app_schema.js";
 
 export function Canvas(props: {
-	items: TreeView<ItemsSchema>;
+	items: Items;
 	sessionTree: TreeView<typeof Session>;
 	audience: IServiceAudience<IMember>;
 	container: IFluidContainer;
@@ -39,17 +38,6 @@ export function Canvas(props: {
 	setSaved: (arg: boolean) => void;
 	setFluidMembers: (arg: string[]) => void;
 }): JSX.Element {
-	const [items, setItems] = useState<Items>(props.items.root);
-
-	// Register for tree deltas when the component mounts.
-	// Any time the items array changes, the app will update.
-	useEffect(() => {
-		const unsubscribe = props.items.events.on("rootChanged", () => {
-			setItems(props.items.root);
-		});
-		return unsubscribe;
-	}, []);
-
 	useEffect(() => {
 		const updateConnectionState = () => {
 			if (props.container.connectionState === ConnectionState.Connected) {
@@ -99,14 +87,14 @@ export function Canvas(props: {
 			<NewItemButton
 				key={Item.description}
 				Item={Item}
-				items={props.items.root}
+				items={props.items}
 				session={props.sessionTree.root}
 				clientId={props.currentUser}
 			/>
 		);
 	});
 
-	const ItemsView = items.View;
+	const ItemsView = props.items.View;
 
 	return (
 		<div className="relative flex grow-0 h-full w-full bg-transparent">
@@ -123,7 +111,7 @@ export function Canvas(props: {
 					{newItemButtons}
 					<DeleteNotesButton
 						session={props.sessionTree.root}
-						items={props.items.root}
+						items={props.items}
 						clientId={props.currentUser}
 					/>
 				</ButtonGroup>
